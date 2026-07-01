@@ -1,0 +1,75 @@
+{
+  "name": "proxy-bridge",
+  "version": "0.1.0",
+  "description": "Next.js App Router proxy bridge for token-based backend authentication with httpOnly cookies, refresh retry, and response sanitization.",
+  "author": "Samir Mirzaliyev",
+  "maintainers": [
+    {
+      "name": "Samir Mirzaliyev",
+      "email": "themirzaliyev@gmail.com"
+    }
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samir-mirzaliyev/proxy-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/samir-mirzaliyev/proxy-bridge/issues"
+  },
+  "homepage": "https://github.com/samir-mirzaliyev/proxy-bridge#readme",
+  "keywords": [
+    "next",
+    "nextjs",
+    "next.js",
+    "app-router",
+    "route-handler",
+    "proxy",
+    "auth",
+    "authentication",
+    "http-only",
+    "httponly",
+    "cookies",
+    "refresh-token",
+    "access-token",
+    "bff"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run type-check && npm run test && npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "next": ">=14"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
