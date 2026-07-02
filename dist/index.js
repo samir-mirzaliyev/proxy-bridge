@@ -500,7 +500,7 @@ function createHandler(method, handler) {
   });
 }
 function createProxyHandlers(config) {
-  const handler = new AuthProxyRequestHandler(normalizeConfig(config));
+  const handler = new AuthProxyRequestHandler(config);
   return {
     GET: createHandler("GET", handler),
     POST: createHandler("POST", handler),
@@ -509,8 +509,59 @@ function createProxyHandlers(config) {
     DELETE: createHandler("DELETE", handler)
   };
 }
+
+// src/server/build-proxy-fetch-url.util.ts
+function normalizeRoutePrefix(routePrefix) {
+  const normalized = routePrefix.replace(/^\/+|\/+$/g, "");
+  return normalized ? `/${normalized}` : "";
+}
+function normalizeInputPath(input) {
+  return input.startsWith("/") ? input : `/${input}`;
+}
+function buildProxyFetchUrl({
+  appUrl,
+  routePrefix,
+  input
+}) {
+  if (/^(?:[a-z][a-z\d+\-.]*:)?\/\//i.test(input)) {
+    throw new Error("proxyBridge.fetch only accepts internal proxy paths");
+  }
+  const prefix = normalizeRoutePrefix(routePrefix);
+  const inputPath = normalizeInputPath(input);
+  const path = prefix && !inputPath.startsWith(`${prefix}/`) ? `${prefix}${inputPath}` : inputPath;
+  return new URL(path, appUrl);
+}
+
+// src/server/create-server-proxy-fetch.ts
+function createServerProxyFetch({
+  appUrl,
+  routePrefix
+}) {
+  return async function serverProxyFetch(input, init) {
+    const { cookies: cookies2 } = await import("next/headers");
+    const cookieStore = await cookies2();
+    const headers = new Headers(init?.headers);
+    headers.set("Cookie", cookieStore.toString());
+    return fetch(buildProxyFetchUrl({ appUrl, routePrefix, input }), {
+      ...init,
+      headers
+    });
+  };
+}
+
+// src/create-proxy-bridge.ts
+function createProxyBridge(config) {
+  const normalizedConfig = normalizeConfig(config);
+  return {
+    handlers: createProxyHandlers(normalizedConfig),
+    fetch: createServerProxyFetch({
+      appUrl: config.appUrl,
+      routePrefix: config.routePrefix ?? "/api"
+    })
+  };
+}
 export {
-  createProxyHandlers,
+  createProxyBridge,
   sanitizeTokenResponse
 };
 //# sourceMappingURL=index.js.map

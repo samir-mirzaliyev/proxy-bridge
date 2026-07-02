@@ -1,7 +1,9 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -15,12 +17,20 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
-  createProxyHandlers: () => createProxyHandlers,
+  createProxyBridge: () => createProxyBridge,
   sanitizeTokenResponse: () => sanitizeTokenResponse
 });
 module.exports = __toCommonJS(index_exports);
@@ -527,7 +537,7 @@ function createHandler(method, handler) {
   });
 }
 function createProxyHandlers(config) {
-  const handler = new AuthProxyRequestHandler(normalizeConfig(config));
+  const handler = new AuthProxyRequestHandler(config);
   return {
     GET: createHandler("GET", handler),
     POST: createHandler("POST", handler),
@@ -536,9 +546,60 @@ function createProxyHandlers(config) {
     DELETE: createHandler("DELETE", handler)
   };
 }
+
+// src/server/build-proxy-fetch-url.util.ts
+function normalizeRoutePrefix(routePrefix) {
+  const normalized = routePrefix.replace(/^\/+|\/+$/g, "");
+  return normalized ? `/${normalized}` : "";
+}
+function normalizeInputPath(input) {
+  return input.startsWith("/") ? input : `/${input}`;
+}
+function buildProxyFetchUrl({
+  appUrl,
+  routePrefix,
+  input
+}) {
+  if (/^(?:[a-z][a-z\d+\-.]*:)?\/\//i.test(input)) {
+    throw new Error("proxyBridge.fetch only accepts internal proxy paths");
+  }
+  const prefix = normalizeRoutePrefix(routePrefix);
+  const inputPath = normalizeInputPath(input);
+  const path = prefix && !inputPath.startsWith(`${prefix}/`) ? `${prefix}${inputPath}` : inputPath;
+  return new URL(path, appUrl);
+}
+
+// src/server/create-server-proxy-fetch.ts
+function createServerProxyFetch({
+  appUrl,
+  routePrefix
+}) {
+  return async function serverProxyFetch(input, init) {
+    const { cookies: cookies2 } = await import("next/headers");
+    const cookieStore = await cookies2();
+    const headers = new Headers(init?.headers);
+    headers.set("Cookie", cookieStore.toString());
+    return fetch(buildProxyFetchUrl({ appUrl, routePrefix, input }), {
+      ...init,
+      headers
+    });
+  };
+}
+
+// src/create-proxy-bridge.ts
+function createProxyBridge(config) {
+  const normalizedConfig = normalizeConfig(config);
+  return {
+    handlers: createProxyHandlers(normalizedConfig),
+    fetch: createServerProxyFetch({
+      appUrl: config.appUrl,
+      routePrefix: config.routePrefix ?? "/api"
+    })
+  };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  createProxyHandlers,
+  createProxyBridge,
   sanitizeTokenResponse
 });
 //# sourceMappingURL=index.cjs.map

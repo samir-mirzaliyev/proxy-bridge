@@ -34,13 +34,14 @@ npm install ./proxy-bridge
 
 ## Basic Usage
 
-Create a catch-all API route:
+Create a shared ProxyBridge instance:
 
 ```ts
-// src/app/api/[...proxy]/route.ts
-import { createProxyHandlers } from 'proxy-bridge';
+// src/proxy-bridge.ts
+import { createProxyBridge } from 'proxy-bridge';
 
-export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandlers({
+export const proxyBridge = createProxyBridge({
+  appUrl: process.env.APP_URL!,
   backendBaseUrl: 'https://backend.example.com/v1',
   cookies: {
     access: {
@@ -60,6 +61,15 @@ export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandlers({
 });
 ```
 
+Use it in a catch-all API route:
+
+```ts
+// src/app/api/[...proxy]/route.ts
+import { proxyBridge } from '@/proxy-bridge';
+
+export const { GET, POST, PUT, PATCH, DELETE } = proxyBridge.handlers;
+```
+
 Then call your API through the Next.js route:
 
 ```ts
@@ -76,7 +86,63 @@ Default URL mapping:
 /api/users/me -> https://backend.example.com/v1/users/me
 ```
 
-## createProxyHandlers Parameters
+## CSR and SSR Usage
+
+### CSR with TanStack Query
+
+```ts
+import { useQuery } from '@tanstack/react-query';
+
+export function useProfile() {
+  return useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/users/me', {
+        credentials: 'include',
+      });
+
+      return response.json();
+    },
+  });
+}
+```
+
+### SSR
+
+```ts
+import { proxyBridge } from '@/proxy-bridge';
+
+export async function getProfile() {
+  const response = await proxyBridge.fetch('/users/me', {
+    cache: 'no-store',
+  });
+
+  return response.json();
+}
+```
+
+## createProxyBridge Parameters
+
+### `appUrl`
+
+The public URL of your Next.js application. It is used by `proxyBridge.fetch`
+when making SSR requests to your internal proxy route.
+
+```ts
+appUrl: 'https://app.example.com'
+```
+
+Default: no default, required.
+
+### `routePrefix`
+
+The internal route prefix where your catch-all proxy route is mounted.
+
+```ts
+routePrefix: '/api'
+```
+
+Default: `'/api'`
 
 ### `backendBaseUrl`
 
@@ -417,7 +483,7 @@ Default: `undefined`
 
 ## Notes
 
-- The main public API is `createProxyHandlers`.
+- The main public API is `createProxyBridge`.
 - The package is designed for Next.js App Router route handlers.
 - Tokens are stored in `httpOnly` cookies by default.
 - Access token forwarding defaults to `Authorization: Bearer <token>`.

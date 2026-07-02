@@ -8,6 +8,13 @@ type ProxyContext = {
     }>;
 };
 type ProxyHandler = (request: ProxyRequest, context: ProxyContext) => Promise<Response>;
+type ProxyHandlers = {
+    GET: ProxyHandler;
+    POST: ProxyHandler;
+    PUT: ProxyHandler;
+    PATCH: ProxyHandler;
+    DELETE: ProxyHandler;
+};
 type AuthTokens = {
     accessToken?: string;
     refreshToken?: string;
@@ -80,18 +87,21 @@ type ProxyConfig = {
     buildBackendUrl?: (context: BackendUrlContext) => URL | string;
     buildRefreshRequest?: (context: RefreshRequestContext) => RequestInit;
 };
+type ProxyBridgeConfig = ProxyConfig & {
+    appUrl: string;
+    routePrefix?: string;
+};
+type ServerProxyFetch = (input: string, init?: RequestInit) => Promise<Response>;
+type ProxyBridge = {
+    handlers: ProxyHandlers;
+    fetch: ServerProxyFetch;
+};
 type NormalizedProxyConfig = Required<Pick<ProxyConfig, 'cookies' | 'auth' | 'defaultHeaders' | 'overrideHeaders' | 'stripRequestHeaders' | 'stripResponseHeaders'>> & Pick<ProxyConfig, 'backendBaseUrl' | 'extractTokens' | 'sanitizeTokenResponse' | 'buildBackendUrl' | 'buildRefreshRequest'> & {
     refresh: NormalizedProxyRefreshConfig;
 };
 
-declare function createProxyHandlers(config: ProxyConfig): {
-    GET: ProxyHandler;
-    POST: ProxyHandler;
-    PUT: ProxyHandler;
-    PATCH: ProxyHandler;
-    DELETE: ProxyHandler;
-};
+declare function createProxyBridge(config: ProxyBridgeConfig): ProxyBridge;
 
 declare function sanitizeTokenResponse<T>(value: T): T;
 
-export { type AuthCookieConfig, type AuthHeaderBuilder, type AuthHeaderContext, type AuthTokens, type BackendUrlContext, type HttpMethod, type ProxyAuthConfig, type ProxyConfig, type ProxyContext, type ProxyCookiesConfig, type ProxyHandler, type ProxyRefreshConfig, type ProxyRequest, type RefreshRequestContext, type SanitizeTokenResponseContext, type SanitizeTokenResponseMode, createProxyHandlers, sanitizeTokenResponse };
+export { type AuthCookieConfig, type AuthHeaderBuilder, type AuthHeaderContext, type AuthTokens, type BackendUrlContext, type HttpMethod, type ProxyAuthConfig, type ProxyBridge, type ProxyBridgeConfig, type ProxyConfig, type ProxyContext, type ProxyCookiesConfig, type ProxyHandler, type ProxyHandlers, type ProxyRefreshConfig, type ProxyRequest, type RefreshRequestContext, type SanitizeTokenResponseContext, type SanitizeTokenResponseMode, type ServerProxyFetch, createProxyBridge, sanitizeTokenResponse };

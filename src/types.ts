@@ -10,6 +10,14 @@ export type ProxyContext = {
 
 export type ProxyHandler = (request: ProxyRequest, context: ProxyContext) => Promise<Response>;
 
+export type ProxyHandlers = {
+  GET: ProxyHandler;
+  POST: ProxyHandler;
+  PUT: ProxyHandler;
+  PATCH: ProxyHandler;
+  DELETE: ProxyHandler;
+};
+
 export type AuthTokens = {
   accessToken?: string;
   refreshToken?: string;
@@ -111,6 +119,18 @@ export type ProxyConfig = {
   sanitizeTokenResponse?: SanitizeTokenResponseMode;
   buildBackendUrl?: (context: BackendUrlContext) => URL | string;
   buildRefreshRequest?: (context: RefreshRequestContext) => RequestInit;
+};
+
+export type ProxyBridgeConfig = ProxyConfig & {
+  appUrl: string;
+  routePrefix?: string;
+};
+
+export type ServerProxyFetch = (input: string, init?: RequestInit) => Promise<Response>;
+
+export type ProxyBridge = {
+  handlers: ProxyHandlers;
+  fetch: ServerProxyFetch;
 };
 
 export type NormalizedProxyConfig = Required<

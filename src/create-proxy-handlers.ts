@@ -1,7 +1,13 @@
-import { normalizeConfig } from './config/normalize-config.util';
 import { AuthProxyRequestHandler } from './proxy/auth-proxy-request-handler';
 
-import type { HttpMethod, ProxyConfig, ProxyContext, ProxyHandler, ProxyRequest } from './types';
+import type {
+  HttpMethod,
+  NormalizedProxyConfig,
+  ProxyContext,
+  ProxyHandler,
+  ProxyHandlers,
+  ProxyRequest,
+} from './types';
 
 function createHandler(method: HttpMethod, handler: AuthProxyRequestHandler): ProxyHandler {
   return (request: ProxyRequest, context: ProxyContext) =>
@@ -12,8 +18,8 @@ function createHandler(method: HttpMethod, handler: AuthProxyRequestHandler): Pr
     });
 }
 
-export function createProxyHandlers(config: ProxyConfig) {
-  const handler = new AuthProxyRequestHandler(normalizeConfig(config));
+export function createProxyHandlers(config: NormalizedProxyConfig): ProxyHandlers {
+  const handler = new AuthProxyRequestHandler(config);
 
   return {
     GET: createHandler('GET', handler),
