@@ -17,7 +17,7 @@ Browser -> Next.js /api/[...proxy] -> Backend API
 - Adds the access token to backend requests.
 - Refreshes the access token when the backend returns an auth error.
 - Retries the failed request after a successful refresh.
-- Clears cookies on logout or failed refresh.
+- Clears cookies on logout, or when a refresh is attempted and fails — not on a plain `401` for a request that had no refresh token.
 - Removes token values from auth responses before returning data to the browser.
 
 ## Installation
