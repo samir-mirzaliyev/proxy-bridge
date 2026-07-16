@@ -1,4 +1,5 @@
 import { AuthCookieStore } from '../cookies/auth-cookie-store';
+import { shouldClearCookies } from '../request/auth/should-clear-cookies.util';
 import { shouldRefreshRequest } from '../request/auth/should-refresh-request';
 import { TokenRefreshCoordinator } from '../request/auth/token-refresh-coordinator';
 import { BackendRequestClient } from '../request/backend/backend-request-client';
@@ -43,6 +44,7 @@ export class AuthProxyRequestHandler {
     const backendPath = buildBackendPath(proxy);
     const body = await getRequestBody(request, method);
     const accessToken = await this.cookieStore.getAccessToken();
+    const refreshToken = await this.cookieStore.getRefreshToken();
 
     let backendResponse = await this.backendClient.send({
       request,
@@ -54,9 +56,11 @@ export class AuthProxyRequestHandler {
     let refreshResult: TokenRefreshResult | undefined;
 
     if (shouldRefreshRequest({ response: backendResponse, backendPath, config: this.config })) {
-      refreshResult = await this.refreshCoordinator.refresh(() =>
-        this.refreshService.refresh({ request, currentAccessToken: accessToken }),
-      );
+      refreshResult = refreshToken
+        ? await this.refreshCoordinator.refresh(refreshToken, () =>
+            this.refreshService.refresh({ request, currentAccessToken: accessToken }),
+          )
+        : { attempted: false };
 
       if (refreshResult?.tokens?.accessToken) {
         backendResponse = await this.backendClient.send({
@@ -87,13 +91,7 @@ export class AuthProxyRequestHandler {
       );
     }
 
-    const shouldClear =
-      backendPath === this.config.auth.logoutEndpoint ||
-      (backendResponse.status === 401 &&
-        refreshResult?.attempted === true &&
-        !refreshResult.tokens?.accessToken);
-
-    if (shouldClear) {
+    if (shouldClearCookies({ backendPath, refreshResult, config: this.config })) {
       this.cookieStore.clear(response);
     }
 

@@ -1,6 +1,6 @@
 {
   "name": "proxy-bridge",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Next.js App Router proxy bridge for token-based backend authentication with httpOnly cookies, refresh retry, and response sanitization.",
   "author": "Samir Mirzaliyev",
   "maintainers": [

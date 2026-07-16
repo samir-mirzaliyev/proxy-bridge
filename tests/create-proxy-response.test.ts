@@ -37,4 +37,30 @@ describe('createProxyResponse', () => {
     expect(response.headers.get('x-request-id')).toBe('123');
     await expect(response.json()).resolves.toEqual({ message: 'Invalid' });
   });
+
+  it('sets an exact Content-Length from the re-serialized body byte length', () => {
+    const body = JSON.stringify({ message: 'çığöş' });
+    const response = createProxyResponse({
+      backendResponse: new Response(null, { status: 200 }),
+      parsedResponse: { body, contentType: 'application/json', payload: null },
+      config: normalizeConfig({
+        backendBaseUrl: 'https://backend.test',
+        cookies: {
+          access: { name: 'access_token' },
+          refresh: { name: 'refresh_token' },
+        },
+        auth: {
+          refreshEndpoint: 'auth/refresh',
+          logoutEndpoint: 'auth/logout',
+          tokenEndpointPatterns: [],
+        },
+      }),
+    });
+
+    // Multi-byte chars: byte length must come from the encoded bytes, not string length.
+    expect(response.headers.get('content-length')).toBe(
+      String(new TextEncoder().encode(body).byteLength),
+    );
+    expect(response.headers.get('transfer-encoding')).toBeNull();
+  });
 });
