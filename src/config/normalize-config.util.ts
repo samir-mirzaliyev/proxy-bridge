@@ -17,5 +17,6 @@ export function normalizeConfig(config: ProxyConfig): NormalizedProxyConfig {
     overrideHeaders: config.overrideHeaders ?? {},
     stripRequestHeaders: config.stripRequestHeaders ?? Array.from(HOP_BY_HOP_HEADERS),
     stripResponseHeaders: config.stripResponseHeaders ?? [...Array.from(HOP_BY_HOP_HEADERS), 'set-cookie'],
+    responseCacheControl: config.responseCacheControl ?? 'no-store',
   };
 }

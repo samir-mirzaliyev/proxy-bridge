@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Added: `responseCacheControl` config option. The proxy now stamps `Cache-Control` on every proxied response and, when set, drops the `etag`, `last-modified`, `expires`, `pragma`, and `age` cache validators.
+- Changed: proxied responses are `no-store` by default. Because the proxy serves per-user authenticated data, a browser-cached copy could be replayed on a back/forward navigation without revalidation and render stale data. Set `responseCacheControl: false` to restore the previous behavior of forwarding the backend's own caching headers.
+
 ## 0.2.3
 
 - Fixed: concurrent requests no longer share a single process-wide refresh. The refresh coordinator is now keyed by the refresh-token value, so requests for different sessions never share a refresh result — preventing cross-request/cross-user contamination where one request's failed refresh could clear another request's cookies.

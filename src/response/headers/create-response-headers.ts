@@ -22,5 +22,12 @@ export function createResponseHeaders({
     headers.set('content-type', contentType);
   }
 
+  if (config.responseCacheControl !== false) {
+    for (const header of ['etag', 'last-modified', 'expires', 'pragma', 'age']) {
+      headers.delete(header);
+    }
+    headers.set('cache-control', config.responseCacheControl);
+  }
+
   return headers;
 }

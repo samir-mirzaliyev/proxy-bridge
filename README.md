@@ -369,6 +369,22 @@ stripResponseHeaders: ['set-cookie']
 
 Default: hop-by-hop headers plus `set-cookie`.
 
+### `responseCacheControl`
+
+`Cache-Control` value stamped on every proxied response. Because the proxy
+serves per-user, authenticated data, responses must not be cached by the browser
+or intermediaries — a cached copy can be replayed on a back/forward navigation
+without revalidation and show stale data. When set, the proxy also drops the
+`etag`, `last-modified`, `expires`, `pragma`, and `age` headers so no cached copy
+can be revalidated into use.
+
+```ts
+responseCacheControl: 'no-store'
+```
+
+Default: `'no-store'`. Set to `false` to forward the backend's own
+`Cache-Control` (and cache validators) unchanged.
+
 ### `extractTokens`
 
 Custom token extractor for backend responses.

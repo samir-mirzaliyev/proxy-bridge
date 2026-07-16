@@ -28,6 +28,7 @@ describe('normalizeConfig', () => {
     });
     expect(config.stripRequestHeaders).toContain('cookie');
     expect(config.stripResponseHeaders).toContain('set-cookie');
+    expect(config.responseCacheControl).toBe('no-store');
   });
 
   it('preserves provided optional config values', () => {
@@ -47,6 +48,7 @@ describe('normalizeConfig', () => {
       overrideHeaders: { 'X-App': 'web' },
       stripRequestHeaders: ['host'],
       stripResponseHeaders: ['server'],
+      responseCacheControl: 'private, max-age=0',
       refresh: {
         statusCodes: [401, 419],
         tokenTransport: 'header',
@@ -61,6 +63,7 @@ describe('normalizeConfig', () => {
     expect(config.overrideHeaders).toEqual({ 'X-App': 'web' });
     expect(config.stripRequestHeaders).toEqual(['host']);
     expect(config.stripResponseHeaders).toEqual(['server']);
+    expect(config.responseCacheControl).toBe('private, max-age=0');
     expect(config.refresh).toMatchObject({
       statusCodes: [401, 419],
       tokenTransport: 'header',

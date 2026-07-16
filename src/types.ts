@@ -120,6 +120,7 @@ export type ProxyConfig = {
   overrideHeaders?: Record<string, string>;
   stripRequestHeaders?: string[];
   stripResponseHeaders?: string[];
+  responseCacheControl?: string | false;
   extractTokens?: (payload: unknown) => AuthTokens;
   sanitizeTokenResponse?: SanitizeTokenResponseMode;
   buildBackendUrl?: (context: BackendUrlContext) => URL | string;
@@ -147,6 +148,7 @@ export type NormalizedProxyConfig = Required<
     | 'overrideHeaders'
     | 'stripRequestHeaders'
     | 'stripResponseHeaders'
+    | 'responseCacheControl'
   >
 > &
   Pick<
