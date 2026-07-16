@@ -112,4 +112,68 @@ describe('AuthProxyRequestHandler', () => {
     expect(nextResponse.cookies.get('access_token')?.value).toBe('new-access-token');
     expect(nextResponse.cookies.get('refresh_token')?.value).toBe('new-refresh-token');
   });
+
+  it('does not clear cookies on a 401 when no refresh token is present (unauthenticated)', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 401 }));
+
+    const response = await createHandler().handle({
+      request: createRequest('https://app.test/api/users/me'),
+      context: {
+        params: Promise.resolve({ proxy: ['users', 'me'] }),
+      },
+      method: 'GET',
+    });
+
+    // Only the initial backend call ran — no refresh attempt without a refresh token.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(401);
+    const nextResponse = response as NextResponse;
+
+    // No cookie-delete headers must be emitted for a plain unauthenticated 401.
+    expect(nextResponse.cookies.get('access_token')).toBeUndefined();
+    expect(nextResponse.cookies.get('refresh_token')).toBeUndefined();
+  });
+
+  it('clears cookies when a refresh was attempted but failed (expired session)', async () => {
+    cookieValues.set('access_token', 'old-access-token');
+    cookieValues.set('refresh_token', 'refresh-token');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    const response = await createHandler().handle({
+      request: createRequest('https://app.test/api/users/me'),
+      context: {
+        params: Promise.resolve({ proxy: ['users', 'me'] }),
+      },
+      method: 'GET',
+    });
+
+    // Initial call + failed refresh attempt, no retry.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const nextResponse = response as NextResponse;
+
+    expect(nextResponse.cookies.get('access_token')?.value).toBe('');
+    expect(nextResponse.cookies.get('refresh_token')?.value).toBe('');
+  });
+
+  it('always clears cookies on the logout endpoint', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+
+    const response = await createHandler().handle({
+      request: createRequest('https://app.test/api/auth/logout', { method: 'POST' }),
+      context: {
+        params: Promise.resolve({ proxy: ['auth', 'logout'] }),
+      },
+      method: 'POST',
+    });
+
+    const nextResponse = response as NextResponse;
+
+    expect(nextResponse.cookies.get('access_token')?.value).toBe('');
+    expect(nextResponse.cookies.get('refresh_token')?.value).toBe('');
+  });
 });

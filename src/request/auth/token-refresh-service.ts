@@ -2,7 +2,7 @@ import { buildBackendUrl } from '../backend/build-backend-url.util';
 import { AuthCookieStore } from '../../cookies/auth-cookie-store';
 import { extractTokens } from '../../tokens/extract-tokens.util';
 
-import type { AuthTokens, NormalizedProxyConfig, ProxyRequest } from '../../types';
+import type { NormalizedProxyConfig, ProxyRequest, TokenRefreshResult } from '../../types';
 
 function applyCurrentAccessToken({
   headers,
@@ -91,11 +91,11 @@ export class TokenRefreshService {
   }: {
     request: ProxyRequest;
     currentAccessToken?: string;
-  }): Promise<AuthTokens | undefined> {
+  }): Promise<TokenRefreshResult> {
     const refreshToken = await this.cookieStore.getRefreshToken();
 
     if (!refreshToken) {
-      return undefined;
+      return { attempted: false };
     }
 
     const response = await fetch(
@@ -120,10 +120,10 @@ export class TokenRefreshService {
     );
 
     if (!response.ok) {
-      return undefined;
+      return { attempted: true };
     }
 
     const payload = await response.json().catch(() => null);
-    return extractTokens(payload, this.config.extractTokens);
+    return { attempted: true, tokens: extractTokens(payload, this.config.extractTokens) };
   }
 }

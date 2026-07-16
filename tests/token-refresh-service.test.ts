@@ -105,14 +105,16 @@ describe('TokenRefreshService', () => {
 
     await expect(
       new TokenRefreshService(config, cookieStore).refresh({ request: createRequest() }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ attempted: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('returns undefined when the refresh response is not successful', async () => {
+  it('reports an attempted-but-failed refresh when the refresh response is not successful', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 401 }));
 
-    await expect(createService().refresh({ request: createRequest() })).resolves.toBeUndefined();
+    await expect(createService().refresh({ request: createRequest() })).resolves.toEqual({
+      attempted: true,
+    });
   });
 
   it('uses a custom refresh request builder when configured', async () => {

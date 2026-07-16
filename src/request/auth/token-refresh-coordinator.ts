@@ -1,15 +1,13 @@
-import type { AuthTokens } from '../../types';
-
 export class TokenRefreshCoordinator {
-  private pendingRefresh?: Promise<AuthTokens | undefined>;
+  private pendingRefresh?: Promise<unknown>;
 
-  refresh(refreshFn: () => Promise<AuthTokens | undefined>) {
+  refresh<T>(refreshFn: () => Promise<T>): Promise<T> {
     if (!this.pendingRefresh) {
       this.pendingRefresh = refreshFn().finally(() => {
         this.pendingRefresh = undefined;
       });
     }
 
-    return this.pendingRefresh;
+    return this.pendingRefresh as Promise<T>;
   }
 }

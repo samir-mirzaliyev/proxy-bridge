@@ -23,6 +23,11 @@ export type AuthTokens = {
   refreshToken?: string;
 };
 
+export type TokenRefreshResult = {
+  attempted: boolean;
+  tokens?: AuthTokens;
+};
+
 export type SameSite = 'strict' | 'lax' | 'none';
 
 export type AuthCookieConfig = {

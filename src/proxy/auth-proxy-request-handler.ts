@@ -10,7 +10,13 @@ import { parseBackendResponse } from '../response/parse-backend-response';
 import { extractTokens } from '../tokens/extract-tokens.util';
 import { shouldStoreTokens } from '../tokens/should-store-tokens.util';
 
-import type { HttpMethod, NormalizedProxyConfig, ProxyContext, ProxyRequest } from '../types';
+import type {
+  HttpMethod,
+  NormalizedProxyConfig,
+  ProxyContext,
+  ProxyRequest,
+  TokenRefreshResult,
+} from '../types';
 
 export class AuthProxyRequestHandler {
   private readonly cookieStore: AuthCookieStore;
@@ -45,20 +51,20 @@ export class AuthProxyRequestHandler {
       body,
       accessToken,
     });
-    let refreshedTokens = undefined;
+    let refreshResult: TokenRefreshResult | undefined;
 
     if (shouldRefreshRequest({ response: backendResponse, backendPath, config: this.config })) {
-      refreshedTokens = await this.refreshCoordinator.refresh(() =>
+      refreshResult = await this.refreshCoordinator.refresh(() =>
         this.refreshService.refresh({ request, currentAccessToken: accessToken }),
       );
 
-      if (refreshedTokens?.accessToken) {
+      if (refreshResult?.tokens?.accessToken) {
         backendResponse = await this.backendClient.send({
           request,
           method,
           backendPath,
           body,
-          accessToken: refreshedTokens.accessToken,
+          accessToken: refreshResult.tokens.accessToken,
         });
       }
     }
@@ -70,8 +76,8 @@ export class AuthProxyRequestHandler {
       config: this.config,
     });
 
-    if (refreshedTokens?.accessToken) {
-      this.cookieStore.setTokens(response, refreshedTokens);
+    if (refreshResult?.tokens?.accessToken) {
+      this.cookieStore.setTokens(response, refreshResult.tokens);
     }
 
     if (shouldStoreTokens(backendPath, this.config)) {
@@ -81,10 +87,13 @@ export class AuthProxyRequestHandler {
       );
     }
 
-    if (
+    const shouldClear =
       backendPath === this.config.auth.logoutEndpoint ||
-      (backendResponse.status === 401 && !refreshedTokens?.accessToken)
-    ) {
+      (backendResponse.status === 401 &&
+        refreshResult?.attempted === true &&
+        !refreshResult.tokens?.accessToken);
+
+    if (shouldClear) {
       this.cookieStore.clear(response);
     }
 
