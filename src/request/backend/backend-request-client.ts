@@ -1,4 +1,5 @@
 import { buildBackendUrl } from './build-backend-url.util';
+import { invokeHook } from '../../hooks/invoke-hook.util';
 import { createForwardHeaders } from '../headers/create-forward-headers';
 
 import type { HttpMethod, NormalizedProxyConfig, ProxyRequest } from '../../types';
@@ -6,31 +7,48 @@ import type { HttpMethod, NormalizedProxyConfig, ProxyRequest } from '../../type
 export class BackendRequestClient {
   constructor(private readonly config: NormalizedProxyConfig) {}
 
-  send({
+  async send({
     request,
     method,
     backendPath,
     body,
     accessToken,
+    refreshToken,
+    isRetry = false,
   }: {
     request: ProxyRequest;
     method: HttpMethod;
     backendPath: string;
     body?: ArrayBuffer;
     accessToken?: string;
+    refreshToken?: string;
+    isRetry?: boolean;
   }) {
-    return fetch(
-      buildBackendUrl({
-        request,
-        backendPath,
-        config: this.config,
-      }),
-      {
-        method,
-        headers: createForwardHeaders({ request, backendPath, accessToken, config: this.config }),
-        body,
-        cache: 'no-store',
-      },
-    );
+    const url = buildBackendUrl({ request, backendPath, config: this.config });
+    const headers = createForwardHeaders({
+      request,
+      backendPath,
+      accessToken,
+      refreshToken,
+      config: this.config,
+    });
+
+    invokeHook(this.config.hooks.onBackendRequest, () => ({
+      method,
+      url: url instanceof URL ? url : new URL(url),
+      backendPath,
+      headers,
+      isRetry,
+    }));
+
+    const response = await fetch(url, { method, headers, body, cache: 'no-store' });
+
+    invokeHook(this.config.hooks.onBackendResponse, () => ({
+      backendPath,
+      status: response.status,
+      isRetry,
+    }));
+
+    return response;
   }
 }

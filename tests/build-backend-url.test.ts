@@ -15,14 +15,14 @@ describe('buildBackendUrl', () => {
       backendPath: 'users/me',
       config: normalizeConfig({
         backendBaseUrl: 'https://backend.test/v1',
-        cookies: {
-          access: { name: 'access_token' },
-          refresh: { name: 'refresh_token' },
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: { cookie: { name: 'refresh_token' } },
         },
-        auth: {
-          refreshEndpoint: 'auth/refresh',
-          logoutEndpoint: 'auth/logout',
-          tokenEndpointPatterns: [],
+        endpoints: {
+          refresh: 'auth/refresh',
+          logout: 'auth/logout',
+          issuesTokens: [],
         },
       }),
     });
@@ -41,14 +41,14 @@ describe('buildBackendUrl', () => {
       backendPath: 'users/me',
       config: normalizeConfig({
         backendBaseUrl: 'https://backend.test/v1',
-        cookies: {
-          access: { name: 'access_token' },
-          refresh: { name: 'refresh_token' },
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: { cookie: { name: 'refresh_token' } },
         },
-        auth: {
-          refreshEndpoint: 'auth/refresh',
-          logoutEndpoint: 'auth/logout',
-          tokenEndpointPatterns: [],
+        endpoints: {
+          refresh: 'auth/refresh',
+          logout: 'auth/logout',
+          issuesTokens: [],
         },
         buildBackendUrl: ({ backendPath }) => `https://gateway.test/internal/${backendPath}`,
       }),

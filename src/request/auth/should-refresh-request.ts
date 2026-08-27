@@ -9,9 +9,9 @@ export function shouldRefreshRequest({
   backendPath: string;
   config: NormalizedProxyConfig;
 }) {
-  if (backendPath === config.auth.refreshEndpoint) {
+  if (backendPath === config.endpoints.refresh) {
     return false;
   }
 
-  return config.refresh.statusCodes.includes(response.status);
+  return config.autoRefresh.on.includes(response.status);
 }

@@ -19,20 +19,18 @@ function createStore() {
   return new AuthCookieStore(
     normalizeConfig({
       backendBaseUrl: 'https://backend.test',
-      cookies: {
+      tokens: {
         access: {
-          name: 'access_token',
-          maxAge: 3600,
+          cookie: { name: 'access_token', maxAge: 3600 },
         },
         refresh: {
-          name: 'refresh_token',
-          sameSite: 'strict',
+          cookie: { name: 'refresh_token', sameSite: 'strict' },
         },
       },
-      auth: {
-        refreshEndpoint: 'auth/refresh',
-        logoutEndpoint: 'auth/logout',
-        tokenEndpointPatterns: [],
+      endpoints: {
+        refresh: 'auth/refresh',
+        logout: 'auth/logout',
+        issuesTokens: [],
       },
     }),
   );

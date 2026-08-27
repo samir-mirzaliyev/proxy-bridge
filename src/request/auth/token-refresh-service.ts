@@ -1,42 +1,11 @@
 import { buildBackendUrl } from '../backend/build-backend-url.util';
 import { AuthCookieStore } from '../../cookies/auth-cookie-store';
 import { extractTokens } from '../../tokens/extract-tokens.util';
+import { applyAccessToken } from '../headers/apply-access-token.util';
+import { applyTokenPlacement } from '../headers/apply-token-placement.util';
+import { resolveRefreshTokenDelivery } from './resolve-refresh-token-delivery.util';
 
 import type { NormalizedProxyConfig, ProxyRequest, TokenRefreshResult } from '../../types';
-
-function applyCurrentAccessToken({
-  headers,
-  request,
-  currentAccessToken,
-  config,
-}: {
-  headers: Headers;
-  request: ProxyRequest;
-  currentAccessToken?: string;
-  config: NormalizedProxyConfig;
-}) {
-  const authHeader = config.auth.authHeader;
-
-  if (!currentAccessToken || authHeader === false) {
-    return;
-  }
-
-  if (authHeader) {
-    new Headers(
-      authHeader({
-        accessToken: currentAccessToken,
-        request,
-        backendPath: config.auth.refreshEndpoint,
-        config,
-      }),
-    ).forEach((value, key) => {
-      headers.set(key, value);
-    });
-    return;
-  }
-
-  headers.set('Authorization', `Bearer ${currentAccessToken}`);
-}
 
 function createDefaultRefreshRequest({
   request,
@@ -49,9 +18,10 @@ function createDefaultRefreshRequest({
   currentAccessToken?: string;
   config: NormalizedProxyConfig;
 }): RequestInit {
+  const backendPath = config.endpoints.refresh;
   const headers = new Headers({
-    ...config.defaultHeaders,
-    ...config.overrideHeaders,
+    ...config.headers.default,
+    ...config.headers.override,
   });
   const init: RequestInit = {
     method: 'POST',
@@ -59,15 +29,19 @@ function createDefaultRefreshRequest({
     cache: 'no-store',
   };
 
-  applyCurrentAccessToken({ headers, request, currentAccessToken, config });
+  applyAccessToken({
+    headers,
+    request,
+    backendPath,
+    accessToken: currentAccessToken,
+    config,
+  });
 
-  if (config.refresh.tokenTransport === 'header') {
-    headers.set(config.refresh.tokenHeaderName, refreshToken);
-    return init;
-  }
+  // Normalization always produces a row for endpoints.refresh, so this is never undefined.
+  const delivery = resolveRefreshTokenDelivery(backendPath, config)!;
 
-  if (config.refresh.tokenTransport === 'cookie') {
-    headers.set('Cookie', `${config.refresh.tokenCookieName}=${encodeURIComponent(refreshToken)}`);
+  if (delivery.in !== 'body') {
+    applyTokenPlacement(headers, delivery, refreshToken);
     return init;
   }
 
@@ -75,7 +49,7 @@ function createDefaultRefreshRequest({
 
   return {
     ...init,
-    body: JSON.stringify({ [config.refresh.tokenBodyKey]: refreshToken }),
+    body: JSON.stringify({ [delivery.key]: refreshToken }),
   };
 }
 
@@ -98,25 +72,14 @@ export class TokenRefreshService {
       return { attempted: false };
     }
 
+    const context = { request, refreshToken, currentAccessToken, config: this.config };
     const response = await fetch(
       buildBackendUrl({
         request,
-        backendPath: this.config.auth.refreshEndpoint,
+        backendPath: this.config.endpoints.refresh,
         config: this.config,
       }),
-      this.config.refresh.buildRequest || this.config.buildRefreshRequest
-        ? (this.config.refresh.buildRequest ?? this.config.buildRefreshRequest)?.({
-            request,
-            refreshToken,
-            currentAccessToken,
-            config: this.config,
-          })
-        : createDefaultRefreshRequest({
-            request,
-            refreshToken,
-            currentAccessToken,
-            config: this.config,
-          }),
+      this.config.autoRefresh.buildRequest?.(context) ?? createDefaultRefreshRequest(context),
     );
 
     if (!response.ok) {
@@ -124,6 +87,7 @@ export class TokenRefreshService {
     }
 
     const payload = await response.json().catch(() => null);
+
     return { attempted: true, tokens: extractTokens(payload, this.config.extractTokens) };
   }
 }

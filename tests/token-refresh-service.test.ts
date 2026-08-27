@@ -4,25 +4,33 @@ import { normalizeConfig } from '../src/config/normalize-config.util';
 import { AuthCookieStore } from '../src/cookies/auth-cookie-store';
 import { TokenRefreshService } from '../src/request/auth/token-refresh-service';
 
+import type { ProxyAutoRefreshConfig, RefreshTokenDelivery } from '../src/types';
+
 function createRequest() {
   const request = new Request('https://app.test/api/users/me') as Request & { nextUrl: URL };
   request.nextUrl = new URL(request.url);
   return request;
 }
 
-function createService(refresh?: Parameters<typeof normalizeConfig>[0]['refresh']) {
+function createService({
+  send,
+  autoRefresh,
+}: {
+  send?: RefreshTokenDelivery<'auth/refresh'>[];
+  autoRefresh?: ProxyAutoRefreshConfig;
+} = {}) {
   const config = normalizeConfig({
     backendBaseUrl: 'https://backend.test',
-    cookies: {
-      access: { name: 'access_token' },
-      refresh: { name: 'refresh_token' },
+    tokens: {
+      access: { cookie: { name: 'access_token' } },
+      refresh: { cookie: { name: 'refresh_token' }, send },
     },
-    auth: {
-      refreshEndpoint: 'auth/refresh',
-      logoutEndpoint: 'auth/logout',
-      tokenEndpointPatterns: [],
+    endpoints: {
+      refresh: 'auth/refresh',
+      logout: 'auth/logout',
+      issuesTokens: [],
     },
-    refresh,
+    autoRefresh,
   });
   const cookieStore = new AuthCookieStore(config);
 
@@ -59,8 +67,7 @@ describe('TokenRefreshService', () => {
     );
 
     await createService({
-      tokenTransport: 'header',
-      tokenHeaderName: 'X-Custom-Refresh',
+      send: [{ to: 'auth/refresh', in: 'header', name: 'X-Custom-Refresh' }],
     }).refresh({ request: createRequest() });
 
     const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers);
@@ -76,8 +83,7 @@ describe('TokenRefreshService', () => {
     );
 
     await createService({
-      tokenTransport: 'cookie',
-      tokenCookieName: 'refresh_token',
+      send: [{ to: 'auth/refresh', in: 'cookie', name: 'refresh_token' }],
     }).refresh({ request: createRequest() });
 
     const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers);
@@ -88,14 +94,14 @@ describe('TokenRefreshService', () => {
   it('does not call the backend when the refresh token cookie is missing', async () => {
     const config = normalizeConfig({
       backendBaseUrl: 'https://backend.test',
-      cookies: {
-        access: { name: 'access_token' },
-        refresh: { name: 'refresh_token' },
+      tokens: {
+        access: { cookie: { name: 'access_token' } },
+        refresh: { cookie: { name: 'refresh_token' } },
       },
-      auth: {
-        refreshEndpoint: 'auth/refresh',
-        logoutEndpoint: 'auth/logout',
-        tokenEndpointPatterns: [],
+      endpoints: {
+        refresh: 'auth/refresh',
+        logout: 'auth/logout',
+        issuesTokens: [],
       },
     });
     const cookieStore = new AuthCookieStore(config);
@@ -125,13 +131,13 @@ describe('TokenRefreshService', () => {
     );
 
     await createService({
-      buildRequest: ({ refreshToken }) => ({
-        method: 'PUT',
-        headers: {
-          'X-Refresh': refreshToken,
-        },
-        cache: 'no-store',
-      }),
+      autoRefresh: {
+        buildRequest: ({ refreshToken }) => ({
+          method: 'PUT',
+          headers: { 'X-Refresh': refreshToken },
+          cache: 'no-store',
+        }),
+      },
     }).refresh({ request: createRequest() });
 
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;

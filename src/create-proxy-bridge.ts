@@ -4,7 +4,9 @@ import { createServerProxyFetch } from './server/create-server-proxy-fetch';
 
 import type { ProxyBridge, ProxyBridgeConfig } from './types';
 
-export function createProxyBridge(config: ProxyBridgeConfig): ProxyBridge {
+export function createProxyBridge<TRefresh extends string>(
+  config: ProxyBridgeConfig<TRefresh>,
+): ProxyBridge {
   const normalizedConfig = normalizeConfig(config);
 
   return {

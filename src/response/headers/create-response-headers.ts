@@ -10,7 +10,7 @@ export function createResponseHeaders({
   config: NormalizedProxyConfig;
 }) {
   const headers = new Headers();
-  const strippedHeaders = new Set(config.stripResponseHeaders.map((header) => header.toLowerCase()));
+  const strippedHeaders = new Set(config.headers.stripResponse.map((header) => header.toLowerCase()));
 
   backendResponse.headers.forEach((value, key) => {
     if (!strippedHeaders.has(key.toLowerCase())) {
@@ -22,11 +22,11 @@ export function createResponseHeaders({
     headers.set('content-type', contentType);
   }
 
-  if (config.responseCacheControl !== false) {
+  if (config.response.cacheControl !== false) {
     for (const header of ['etag', 'last-modified', 'expires', 'pragma', 'age']) {
       headers.delete(header);
     }
-    headers.set('cache-control', config.responseCacheControl);
+    headers.set('cache-control', config.response.cacheControl);
   }
 
   return headers;

@@ -9,7 +9,7 @@ export function shouldClearCookies({
   refreshResult?: TokenRefreshResult;
   config: NormalizedProxyConfig;
 }): boolean {
-  if (backendPath === config.auth.logoutEndpoint) {
+  if (backendPath === config.endpoints.logout) {
     return true;
   }
 

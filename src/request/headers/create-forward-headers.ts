@@ -1,24 +1,50 @@
+import { applyAccessToken } from './apply-access-token.util';
+import { applyTokenPlacement } from './apply-token-placement.util';
+import { resolveForwardedRefreshTokenDelivery } from '../auth/resolve-refresh-token-delivery.util';
+
 import type { NormalizedProxyConfig, ProxyRequest } from '../../types';
 
-function applyHeaders(headers: Headers, values: HeadersInit) {
-  new Headers(values).forEach((value, key) => {
-    headers.set(key, value);
-  });
+function applyRefreshToken({
+  headers,
+  backendPath,
+  refreshToken,
+  config,
+}: {
+  headers: Headers;
+  backendPath: string;
+  refreshToken?: string;
+  config: NormalizedProxyConfig;
+}) {
+  if (!refreshToken) {
+    return;
+  }
+
+  const delivery = resolveForwardedRefreshTokenDelivery(backendPath, config);
+
+  if (!delivery) {
+    return;
+  }
+
+  applyTokenPlacement(headers, delivery, refreshToken);
 }
 
 export function createForwardHeaders({
   request,
   backendPath,
   accessToken,
+  refreshToken,
   config,
 }: {
   request: ProxyRequest;
   backendPath: string;
   accessToken?: string;
+  refreshToken?: string;
   config: NormalizedProxyConfig;
 }) {
   const headers = new Headers();
-  const strippedHeaders = new Set(config.stripRequestHeaders.map((header) => header.toLowerCase()));
+  const strippedHeaders = new Set(
+    config.headers.stripRequest.map((header) => header.toLowerCase()),
+  );
 
   request.headers.forEach((value, key) => {
     if (!strippedHeaders.has(key.toLowerCase())) {
@@ -26,28 +52,18 @@ export function createForwardHeaders({
     }
   });
 
-  Object.entries(config.defaultHeaders).forEach(([key, value]) => {
+  Object.entries(config.headers.default).forEach(([key, value]) => {
     if (!headers.has(key)) {
       headers.set(key, value);
     }
   });
 
-  Object.entries(config.overrideHeaders).forEach(([key, value]) => {
+  Object.entries(config.headers.override).forEach(([key, value]) => {
     headers.set(key, value);
   });
 
-  const authHeader = config.auth.authHeader;
-
-  if (accessToken && authHeader !== false) {
-    if (authHeader) {
-      applyHeaders(headers, authHeader({ accessToken, request, backendPath, config }));
-      return headers;
-    }
-
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  } else {
-    headers.delete('Authorization');
-  }
+  applyRefreshToken({ headers, backendPath, refreshToken, config });
+  applyAccessToken({ headers, request, backendPath, accessToken, config });
 
   return headers;
 }

@@ -3,19 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { normalizeConfig } from '../src/config/normalize-config.util';
 import { resolveSanitizedPayload } from '../src/response/sanitize/resolve-sanitized-payload';
 
-function createConfig(sanitizeTokenResponse?: boolean | 'auth-endpoints' | 'all-json') {
+import type { SanitizeTokensMode } from '../src/types';
+
+function createConfig(sanitizeTokenResponse?: SanitizeTokensMode) {
   return normalizeConfig({
     backendBaseUrl: 'https://backend.test',
-    cookies: {
-      access: { name: 'access_token' },
-      refresh: { name: 'refresh_token' },
+    tokens: {
+      access: { cookie: { name: 'access_token' } },
+      refresh: { cookie: { name: 'refresh_token' } },
     },
-    auth: {
-      refreshEndpoint: 'auth/refresh',
-      logoutEndpoint: 'auth/logout',
-      tokenEndpointPatterns: [/^auth\/login$/],
+    endpoints: {
+      refresh: 'auth/refresh',
+      logout: 'auth/logout',
+      issuesTokens: [/^auth\/login$/],
     },
-    sanitizeTokenResponse,
+    response: { sanitizeTokens: sanitizeTokenResponse },
   });
 }
 

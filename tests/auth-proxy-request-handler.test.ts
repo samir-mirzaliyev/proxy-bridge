@@ -1,6 +1,8 @@
 import type { NextResponse } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ProxyHooks, RefreshTokenDelivery } from '../src/types';
+
 import { normalizeConfig } from '../src/config/normalize-config.util';
 import { AuthProxyRequestHandler } from '../src/proxy/auth-proxy-request-handler';
 
@@ -21,18 +23,19 @@ function createRequest(url: string, init?: RequestInit) {
   return request;
 }
 
-function createHandler() {
+function createHandler(send?: RefreshTokenDelivery<'auth/refresh'>[], hooks?: ProxyHooks) {
   return new AuthProxyRequestHandler(
     normalizeConfig({
       backendBaseUrl: 'https://backend.test/v1',
-      cookies: {
-        access: { name: 'access_token' },
-        refresh: { name: 'refresh_token' },
+      hooks,
+      tokens: {
+        access: { cookie: { name: 'access_token' } },
+        refresh: { cookie: { name: 'refresh_token' }, send },
       },
-      auth: {
-        refreshEndpoint: 'auth/refresh',
-        logoutEndpoint: 'auth/logout',
-        tokenEndpointPatterns: [/^auth\/login$/, /^auth\/refresh$/],
+      endpoints: {
+        refresh: 'auth/refresh',
+        logout: 'auth/logout',
+        issuesTokens: [/^auth\/login$/, /^auth\/refresh$/],
       },
     }),
   );
@@ -103,9 +106,9 @@ describe('AuthProxyRequestHandler', () => {
     expect((fetchMock.mock.calls[2]?.[0] as URL).toString()).toBe(
       'https://backend.test/v1/users/me',
     );
-    expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get('Authorization')).toBe(
-      'Bearer new-access-token',
-    );
+    expect(
+      new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get('Authorization'),
+    ).toBe('Bearer new-access-token');
     await expect(response.json()).resolves.toEqual({ id: 1 });
     const nextResponse = response as NextResponse;
 
@@ -160,6 +163,38 @@ describe('AuthProxyRequestHandler', () => {
     expect(nextResponse.cookies.get('refresh_token')?.value).toBe('');
   });
 
+  it('forwards the rotated refresh token when retrying after a refresh', async () => {
+    cookieValues.set('access_token', 'old-access-token');
+    cookieValues.set('refresh_token', 'old-refresh-token');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          accessToken: 'new-access-token',
+          refreshToken: 'new-refresh-token',
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ data: {} }));
+
+    await createHandler([{ to: /^profiles\/generate-token$/, in: 'cookie' }]).handle({
+      request: createRequest('https://app.test/api/profiles/generate-token?profileId=1', {
+        method: 'POST',
+      }),
+      context: {
+        params: Promise.resolve({ proxy: ['profiles', 'generate-token'] }),
+      },
+      method: 'POST',
+    });
+
+    const initialHeaders = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers);
+    const retryHeaders = new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers);
+
+    expect(initialHeaders.get('Cookie')).toBe('refresh_token=old-refresh-token');
+    expect(retryHeaders.get('Cookie')).toBe('refresh_token=new-refresh-token');
+    expect(retryHeaders.get('Authorization')).toBe('Bearer new-access-token');
+  });
+
   it('always clears cookies on the logout endpoint', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
 
@@ -175,5 +210,66 @@ describe('AuthProxyRequestHandler', () => {
 
     expect(nextResponse.cookies.get('access_token')?.value).toBe('');
     expect(nextResponse.cookies.get('refresh_token')?.value).toBe('');
+  });
+
+  it('reports stored tokens through a hook without exposing their values', async () => {
+    const onTokensStored = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({ data: { accessToken: 'access-token', refreshToken: 'refresh-token' } }),
+    );
+
+    await createHandler(undefined, { onTokensStored }).handle({
+      request: createRequest('https://app.test/api/auth/login', { method: 'POST' }),
+      context: { params: Promise.resolve({ proxy: ['auth', 'login'] }) },
+      method: 'POST',
+    });
+
+    expect(onTokensStored).toHaveBeenCalledWith({
+      backendPath: 'auth/login',
+      source: 'endpoint',
+      hasAccessToken: true,
+      hasRefreshToken: true,
+    });
+    expect(JSON.stringify(onTokensStored.mock.calls)).not.toContain('access-token');
+  });
+
+  it('reports the refresh outcome and the cookie clear reason', async () => {
+    cookieValues.set('access_token', 'old-access-token');
+    cookieValues.set('refresh_token', 'refresh-token');
+    const onRefresh = vi.fn();
+    const onCookiesCleared = vi.fn();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    await createHandler(undefined, { onRefresh, onCookiesCleared }).handle({
+      request: createRequest('https://app.test/api/users/me'),
+      context: { params: Promise.resolve({ proxy: ['users', 'me'] }) },
+      method: 'GET',
+    });
+
+    expect(onRefresh).toHaveBeenCalledWith({ backendPath: 'users/me', outcome: 'failed' });
+    expect(onCookiesCleared).toHaveBeenCalledWith({
+      backendPath: 'users/me',
+      reason: 'refresh-failed',
+    });
+  });
+
+  it('marks the retried request as a retry', async () => {
+    cookieValues.set('access_token', 'old-access-token');
+    cookieValues.set('refresh_token', 'refresh-token');
+    const onBackendRequest = vi.fn();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ accessToken: 'new-access-token' }))
+      .mockResolvedValueOnce(Response.json({ id: 1 }));
+
+    await createHandler(undefined, { onBackendRequest }).handle({
+      request: createRequest('https://app.test/api/users/me'),
+      context: { params: Promise.resolve({ proxy: ['users', 'me'] }) },
+      method: 'GET',
+    });
+
+    expect(onBackendRequest.mock.calls.map(([context]) => context.isRetry)).toEqual([false, true]);
   });
 });

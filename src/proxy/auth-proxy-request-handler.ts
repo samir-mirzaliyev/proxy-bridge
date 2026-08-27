@@ -1,3 +1,4 @@
+import { invokeHook } from '../hooks/invoke-hook.util';
 import { AuthCookieStore } from '../cookies/auth-cookie-store';
 import { shouldClearCookies } from '../request/auth/should-clear-cookies.util';
 import { shouldRefreshRequest } from '../request/auth/should-refresh-request';
@@ -11,13 +12,24 @@ import { parseBackendResponse } from '../response/parse-backend-response';
 import { extractTokens } from '../tokens/extract-tokens.util';
 import { shouldStoreTokens } from '../tokens/should-store-tokens.util';
 
+import type { NextResponse } from 'next/server';
+
 import type {
+  AuthTokens,
   HttpMethod,
   NormalizedProxyConfig,
   ProxyContext,
   ProxyRequest,
   TokenRefreshResult,
 } from '../types';
+
+function resolveRefreshOutcome(result?: TokenRefreshResult) {
+  if (!result?.attempted) {
+    return 'skipped' as const;
+  }
+
+  return result.tokens?.accessToken ? ('succeeded' as const) : ('failed' as const);
+}
 
 export class AuthProxyRequestHandler {
   private readonly cookieStore: AuthCookieStore;
@@ -52,6 +64,7 @@ export class AuthProxyRequestHandler {
       backendPath,
       body,
       accessToken,
+      refreshToken,
     });
     let refreshResult: TokenRefreshResult | undefined;
 
@@ -62,6 +75,11 @@ export class AuthProxyRequestHandler {
           )
         : { attempted: false };
 
+      invokeHook(this.config.hooks.onRefresh, () => ({
+        backendPath,
+        outcome: resolveRefreshOutcome(refreshResult),
+      }));
+
       if (refreshResult?.tokens?.accessToken) {
         backendResponse = await this.backendClient.send({
           request,
@@ -69,6 +87,8 @@ export class AuthProxyRequestHandler {
           backendPath,
           body,
           accessToken: refreshResult.tokens.accessToken,
+          refreshToken: refreshResult.tokens.refreshToken ?? refreshToken,
+          isRetry: true,
         });
       }
     }
@@ -81,20 +101,45 @@ export class AuthProxyRequestHandler {
     });
 
     if (refreshResult?.tokens?.accessToken) {
-      this.cookieStore.setTokens(response, refreshResult.tokens);
+      this.storeTokens(response, backendPath, refreshResult.tokens, 'refresh');
     }
 
     if (shouldStoreTokens(backendPath, this.config)) {
-      this.cookieStore.setTokens(
+      this.storeTokens(
         response,
+        backendPath,
         extractTokens(parsedResponse.payload, this.config.extractTokens),
+        'endpoint',
       );
     }
 
     if (shouldClearCookies({ backendPath, refreshResult, config: this.config })) {
       this.cookieStore.clear(response);
+      invokeHook(this.config.hooks.onCookiesCleared, () => ({
+        backendPath,
+        reason:
+          backendPath === this.config.endpoints.logout
+            ? ('logout' as const)
+            : ('refresh-failed' as const),
+      }));
     }
 
     return response;
+  }
+
+  private storeTokens(
+    response: NextResponse,
+    backendPath: string,
+    tokens: AuthTokens,
+    source: 'refresh' | 'endpoint',
+  ) {
+    this.cookieStore.setTokens(response, tokens);
+
+    invokeHook(this.config.hooks.onTokensStored, () => ({
+      backendPath,
+      source,
+      hasAccessToken: !!tokens.accessToken,
+      hasRefreshToken: !!tokens.refreshToken,
+    }));
   }
 }

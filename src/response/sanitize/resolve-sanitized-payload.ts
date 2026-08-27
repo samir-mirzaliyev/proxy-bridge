@@ -12,18 +12,18 @@ export function resolveSanitizedPayload({
   backendPath: string;
   config: NormalizedProxyConfig;
 }) {
-  const mode = config.sanitizeTokenResponse ?? 'auth-endpoints';
-  const isAuthEndpoint = shouldStoreTokens(backendPath, config);
+  const mode = config.response.sanitizeTokens;
+  const issuesTokens = shouldStoreTokens(backendPath, config);
 
   if (typeof mode === 'function') {
-    return mode({ payload, backendPath, isAuthEndpoint, config });
+    return mode({ payload, backendPath, issuesTokens, config });
   }
 
   if (mode === false) {
     return payload;
   }
 
-  if (mode === true || mode === 'all-json' || (mode === 'auth-endpoints' && isAuthEndpoint)) {
+  if (mode === true || mode === 'all-json' || (mode === 'issuing-endpoints' && issuesTokens)) {
     return sanitizeTokenResponse(payload);
   }
 
