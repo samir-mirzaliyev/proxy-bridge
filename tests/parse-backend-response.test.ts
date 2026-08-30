@@ -39,7 +39,7 @@ describe('parseBackendResponse', () => {
     });
   });
 
-  it('returns ArrayBuffer bodies for non-JSON responses', async () => {
+  it('returns a stream body for non-JSON responses instead of buffering it', async () => {
     const parsed = await parseBackendResponse(
       new Response('plain text', {
         headers: {
@@ -52,6 +52,18 @@ describe('parseBackendResponse', () => {
 
     expect(parsed.contentType).toBe('text/plain');
     expect(parsed.payload).toBeNull();
-    expect(new TextDecoder().decode(parsed.body as ArrayBuffer)).toBe('plain text');
+    expect(parsed.body).toBeInstanceOf(ReadableStream);
+    expect(await new Response(parsed.body).text()).toBe('plain text');
+  });
+
+  it('returns a null body for non-JSON responses with no content', async () => {
+    const parsed = await parseBackendResponse(
+      new Response(null, { status: 204 }),
+      createConfig(),
+      'files/readme',
+    );
+
+    expect(parsed.payload).toBeNull();
+    expect(parsed.body).toBeNull();
   });
 });

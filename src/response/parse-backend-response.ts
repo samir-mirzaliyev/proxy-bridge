@@ -21,7 +21,7 @@ export async function parseBackendResponse(
   }
 
   return {
-    body: await response.arrayBuffer(),
+    body: response.body,
     contentType,
     payload: null,
   };

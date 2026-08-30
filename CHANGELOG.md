@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: non-JSON response bodies (media, files, any binary payload) are now streamed straight through to the client instead of being fully buffered via `response.arrayBuffer()` first. Buffering was only ever needed for JSON responses, since token sanitization requires parsing the payload — non-JSON responses paid the same memory/latency cost for no reason. `Content-Length` is no longer set on streamed responses, since the length of a stream is not known up front; the response is length-delimited via chunked transfer-encoding instead, which is standard. Request bodies (browser → backend) are unaffected — still buffered, since the auto-refresh retry flow needs to resend the same body.
+
 ## 1.0.0
 
 Breaking: the config is now grouped by token instead of by operation. Passing a 0.x config throws at startup listing every key to rename, because silently ignoring them would leave the token-issuing endpoint list empty — tokens would never be stored and auth would break with no visible error. Behaviour is otherwise unchanged; see "Migrating from 0.x" in the README for a before/after config and the full rename table.

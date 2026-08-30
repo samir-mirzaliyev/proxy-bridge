@@ -63,4 +63,28 @@ describe('createProxyResponse', () => {
     );
     expect(response.headers.get('transfer-encoding')).toBeNull();
   });
+
+  it('passes a stream body through untouched without setting Content-Length', async () => {
+    const backendBody = new Response('streamed-bytes').body;
+    const response = createProxyResponse({
+      backendResponse: new Response(null, { status: 200 }),
+      parsedResponse: { body: backendBody, contentType: 'video/mp4', payload: null },
+      config: normalizeConfig({
+        backendBaseUrl: 'https://backend.test',
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: { cookie: { name: 'refresh_token' } },
+        },
+        endpoints: {
+          refresh: 'auth/refresh',
+          logout: 'auth/logout',
+          issuesTokens: [],
+        },
+      }),
+    });
+
+    // Length is unknowable up front for a stream — it must not be stale or fabricated.
+    expect(response.headers.get('content-length')).toBeNull();
+    await expect(response.text()).resolves.toBe('streamed-bytes');
+  });
 });
