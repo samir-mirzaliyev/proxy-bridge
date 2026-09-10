@@ -68,11 +68,12 @@ export type AccessTokenSender =
 
 /**
  * One row of `tokens.refresh.send`: which endpoint receives the refresh token, and where it is
- * placed. `body` is only valid for the endpoint configured as `endpoints.refresh`, because the
- * proxy builds that request itself — relayed requests can only carry extra headers.
+ * placed. For `endpoints.refresh` the proxy builds the request itself; for any other endpoint the
+ * request is relayed, so `body` merges the token into the forwarded JSON body (parsed and
+ * re-serialized) rather than appending a header.
  */
 export type RefreshTokenDelivery<TRefresh extends string = string> =
-  | { to: TRefresh; in: 'body'; key?: string }
+  | { to: EndpointPattern; in: 'body'; key?: string }
   | { to: EndpointPattern; in: 'header'; name?: string }
   | { to: EndpointPattern; in: 'cookie'; name?: string };
 
@@ -203,9 +204,7 @@ export type RefreshDecisionContext = {
 
 export type ProxyConfig<TRefresh extends string = string> = {
   backendBaseUrl?: string;
-  /** `NoInfer` keeps `endpoints.refresh` the only source of `TRefresh`, so a delivery row cannot
-   * widen it and slip a `body` placement past the type check. */
-  tokens: ProxyTokensConfig<NoInfer<TRefresh>>;
+  tokens: ProxyTokensConfig<TRefresh>;
   endpoints: ProxyEndpointsConfig<TRefresh>;
   autoRefresh?: ProxyAutoRefreshConfig;
   headers?: ProxyHeadersConfig;
