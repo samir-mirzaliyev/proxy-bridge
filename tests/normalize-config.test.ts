@@ -86,21 +86,24 @@ describe('normalizeConfig', () => {
     });
   });
 
-  it('rejects a body delivery for anything but the refresh endpoint', () => {
-    expect(() =>
-      normalizeConfig(
-        createConfig({
-          tokens: {
-            access: { cookie: { name: 'access_token' } },
-            refresh: {
-              cookie: { name: 'refresh_token' },
-              // The type guards this too; this covers a widened `endpoints.refresh`.
-              send: [{ to: 'profiles/generate-token' as 'auth/refresh', in: 'body' }],
-            },
+  it('normalizes a body delivery for an endpoint other than endpoints.refresh', () => {
+    const config = normalizeConfig(
+      createConfig({
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: {
+            cookie: { name: 'refresh_token' },
+            send: [{ to: 'profiles/generate-token', in: 'body' }],
           },
-        }),
-      ),
-    ).toThrow(/only valid for endpoints\.refresh/);
+        },
+      }),
+    );
+
+    expect(config.tokens.refresh.send[0]).toEqual({
+      to: 'profiles/generate-token',
+      in: 'body',
+      key: 'refreshToken',
+    });
   });
 
   it('strips stateful regex flags from both pattern lists', () => {

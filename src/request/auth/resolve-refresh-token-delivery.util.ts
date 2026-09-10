@@ -2,8 +2,6 @@ import { matchesEndpointPattern } from '../../config/endpoint-patterns.util';
 
 import type { NormalizedProxyConfig, NormalizedRefreshTokenDelivery } from '../../types';
 
-type ForwardedRefreshTokenDelivery = Exclude<NormalizedRefreshTokenDelivery, { in: 'body' }>;
-
 /** Returns the first `tokens.refresh.send` row matching the backend path, if any. */
 export function resolveRefreshTokenDelivery(
   backendPath: string,
@@ -15,14 +13,22 @@ export function resolveRefreshTokenDelivery(
 }
 
 /**
- * The same lookup for relayed requests, which can only carry headers — the proxy does not rewrite a
- * forwarded body, so a `body` row resolves to nothing here.
+ * The same lookup for relayed requests. A `body` row targeting `endpoints.refresh` resolves to
+ * nothing here — that request is built by `TokenRefreshService` itself, never relayed. A `body`
+ * row targeting any other endpoint resolves normally; the relay path merges the token into the
+ * forwarded JSON body instead of a header (see `applyRefreshTokenToBody`).
  */
 export function resolveForwardedRefreshTokenDelivery(
   backendPath: string,
   config: NormalizedProxyConfig,
-): ForwardedRefreshTokenDelivery | undefined {
+): NormalizedRefreshTokenDelivery | undefined {
   const delivery = resolveRefreshTokenDelivery(backendPath, config);
 
-  return delivery && delivery.in !== 'body' ? delivery : undefined;
+  if (!delivery) {
+    return undefined;
+  }
+
+  const isRefreshEndpointRequest = backendPath === config.endpoints.refresh;
+
+  return delivery.in === 'body' && isRefreshEndpointRequest ? undefined : delivery;
 }

@@ -45,31 +45,9 @@ function normalizeDelivery(
   return { to, in: 'cookie', name: delivery.name ?? cookieName };
 }
 
-function assertBodyOnlyOnRefreshEndpoint(
-  deliveries: RefreshTokenDelivery[],
-  refreshEndpoint: string,
-) {
-  const invalid = deliveries.find(
-    (delivery) => delivery.in === 'body' && delivery.to !== refreshEndpoint,
-  );
-
-  if (!invalid) {
-    return;
-  }
-
-  throw new Error(
-    `proxy-bridge: { in: 'body' } is only valid for endpoints.refresh ('${refreshEndpoint}'), ` +
-      `but it was configured for '${String(invalid.to)}'. The proxy can only add headers to ` +
-      "relayed requests; use { in: 'header' } or { in: 'cookie' } instead.",
-  );
-}
-
 function normalizeRefreshDeliveries(config: ProxyConfig): NormalizedRefreshTokenDelivery[] {
   const configured = config.tokens.refresh.send ?? [];
   const refreshEndpoint = config.endpoints.refresh;
-
-  assertBodyOnlyOnRefreshEndpoint(configured, refreshEndpoint);
-
   const cookieName = config.tokens.refresh.cookie.name;
   const deliveries = configured.map((delivery) => normalizeDelivery(delivery, cookieName));
   const hasRefreshEndpoint = configured.some((delivery) => delivery.to === refreshEndpoint);

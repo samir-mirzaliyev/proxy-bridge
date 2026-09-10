@@ -334,9 +334,10 @@ Rules:
   `{ in: 'body', key: 'refreshToken' }`. Most configs never write this row.
 - **Listing an endpoint enables forwarding for it.** Any row other than `endpoints.refresh` makes
   the proxy attach the refresh token to relayed requests for that path.
-- **`body` is only valid for `endpoints.refresh`.** The proxy builds that request itself; a relayed
-  request can only carry extra headers. The type rejects this, and normalization rejects it again
-  in case `endpoints.refresh` is not a literal.
+- **`body` works for any endpoint.** For `endpoints.refresh` the proxy builds the request itself. For
+  any other endpoint the request is relayed, so the proxy parses the forwarded body as JSON, adds
+  `key`, and re-serializes it (an unparsable or missing body is treated as `{}`); the `Content-Type`
+  header is set to `application/json` to match.
 - **`name` defaults to `tokens.refresh.cookie.name`** for a `cookie` row, and to `X-Refresh-Token`
   for a `header` row.
 - Only the refresh token is sent. The inbound `Cookie` header is stripped first and rebuilt from

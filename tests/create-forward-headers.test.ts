@@ -276,6 +276,32 @@ describe('createForwardHeaders', () => {
     expect(headers.get('Cookie')).toBeNull();
   });
 
+  it('sets a JSON content type when the body transport is configured, without touching headers', () => {
+    const headers = createForwardHeaders({
+      request: createRequest(),
+      backendPath: 'profiles/generate-token',
+      refreshToken: 'refresh-token',
+      config: createForwardConfig({
+        send: [{ to: 'profiles/generate-token', in: 'body' }],
+      }),
+    });
+
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('Cookie')).toBeNull();
+    expect(headers.get('X-Refresh-Token')).toBeNull();
+  });
+
+  it('does not set a JSON content type for the refresh endpoint itself (relayed pass-through)', () => {
+    const headers = createForwardHeaders({
+      request: createRequest(),
+      backendPath: 'auth/refresh',
+      refreshToken: 'refresh-token',
+      config: createForwardConfig(),
+    });
+
+    expect(headers.get('Content-Type')).toBeNull();
+  });
+
   it('lets an explicit authHeader override the forwarded refresh cookie', () => {
     const headers = createForwardHeaders({
       request: createRequest(),
