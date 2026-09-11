@@ -92,4 +92,47 @@ describe('BackendRequestClient', () => {
 
     expect(new Headers(init.headers).get('Cookie')).toBe('refresh_token=refresh-token');
   });
+
+  it('merges the refresh token into the forwarded body when the body transport is configured', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request('https://app.test/api/profiles/generate-token', {
+      method: 'POST',
+    }) as Request & { nextUrl: URL };
+    request.nextUrl = new URL(request.url);
+    const body = new TextEncoder().encode(JSON.stringify({ email: 'a@b.com' })).buffer;
+
+    const client = new BackendRequestClient(
+      normalizeConfig({
+        backendBaseUrl: 'https://backend.test/v1',
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: {
+            cookie: { name: 'refresh_token' },
+            send: [{ to: 'profiles/generate-token', in: 'body' }],
+          },
+        },
+        endpoints: {
+          refresh: 'auth/refresh',
+          logout: 'auth/logout',
+          issuesTokens: [],
+        },
+      }),
+    );
+
+    await client.send({
+      request,
+      method: 'POST',
+      backendPath: 'profiles/generate-token',
+      body,
+      refreshToken: 'refresh-token',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
+    expect(JSON.parse(new TextDecoder().decode(init.body as ArrayBuffer))).toEqual({
+      email: 'a@b.com',
+      refreshToken: 'refresh-token',
+    });
+  });
 });

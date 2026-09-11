@@ -1,4 +1,5 @@
 import { buildBackendUrl } from './build-backend-url.util';
+import { applyRefreshTokenToBody } from '../body/apply-refresh-token-to-body.util';
 import { invokeHook } from '../../hooks/invoke-hook.util';
 import { createForwardHeaders } from '../headers/create-forward-headers';
 
@@ -32,6 +33,12 @@ export class BackendRequestClient {
       refreshToken,
       config: this.config,
     });
+    const forwardedBody = applyRefreshTokenToBody({
+      backendPath,
+      body,
+      refreshToken,
+      config: this.config,
+    });
 
     invokeHook(this.config.hooks.onBackendRequest, () => ({
       method,
@@ -41,7 +48,7 @@ export class BackendRequestClient {
       isRetry,
     }));
 
-    const response = await fetch(url, { method, headers, body, cache: 'no-store' });
+    const response = await fetch(url, { method, headers, body: forwardedBody, cache: 'no-store' });
 
     invokeHook(this.config.hooks.onBackendResponse, () => ({
       backendPath,

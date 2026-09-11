@@ -25,6 +25,13 @@ function applyRefreshToken({
     return;
   }
 
+  if (delivery.in === 'body') {
+    // The token is merged into the forwarded body elsewhere (see `applyRefreshTokenToBody`); the
+    // body is always re-serialized as JSON, so the content type must say so too.
+    headers.set('Content-Type', 'application/json');
+    return;
+  }
+
   applyTokenPlacement(headers, delivery, refreshToken);
 }
 

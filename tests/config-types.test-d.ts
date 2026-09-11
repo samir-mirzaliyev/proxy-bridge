@@ -62,7 +62,6 @@ createProxyBridge({
       cookie: { name: 'refresh_token' },
       send: [
         { to: 'auth/refresh', in: 'body', key: 'refreshToken' },
-        // @ts-expect-error body is only valid for endpoints.refresh
         { to: 'profiles/generate-token', in: 'body' },
         // @ts-expect-error `key` belongs to the body placement
         { to: 'profiles/generate-token', in: 'cookie', key: 'refreshToken' },
