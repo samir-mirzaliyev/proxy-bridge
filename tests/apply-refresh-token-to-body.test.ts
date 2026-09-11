@@ -30,13 +30,14 @@ function createConfig(send?: RefreshTokenDelivery[]) {
 
 describe('applyRefreshTokenToBody', () => {
   it('merges the refresh token into an existing JSON body', () => {
-    const body = applyRefreshTokenToBody({
+    const { body, isMerged } = applyRefreshTokenToBody({
       backendPath: 'profiles/generate-token',
       body: encode(JSON.stringify({ email: 'a@b.com' })),
       refreshToken: 'refresh-token',
       config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
     });
 
+    expect(isMerged).toBe(true);
     expect(JSON.parse(decode(body)!)).toEqual({
       email: 'a@b.com',
       refreshToken: 'refresh-token',
@@ -44,47 +45,100 @@ describe('applyRefreshTokenToBody', () => {
   });
 
   it('uses a custom key', () => {
-    const body = applyRefreshTokenToBody({
+    const { body, isMerged } = applyRefreshTokenToBody({
       backendPath: 'profiles/generate-token',
       body: encode('{}'),
       refreshToken: 'refresh-token',
       config: createConfig([{ to: 'profiles/generate-token', in: 'body', key: 'rt' }]),
     });
 
+    expect(isMerged).toBe(true);
     expect(JSON.parse(decode(body)!)).toEqual({ rt: 'refresh-token' });
   });
 
-  it('falls back to an empty object when the body is missing', () => {
-    const body = applyRefreshTokenToBody({
+  it('overwrites a key the caller already set', () => {
+    const { body } = applyRefreshTokenToBody({
+      backendPath: 'profiles/generate-token',
+      body: encode(JSON.stringify({ refreshToken: 'stale' })),
+      refreshToken: 'refresh-token',
+      config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
+    });
+
+    expect(JSON.parse(decode(body)!)).toEqual({ refreshToken: 'refresh-token' });
+  });
+
+  it('treats an empty body as an empty object, so the key still reaches the backend', () => {
+    const { body, isMerged } = applyRefreshTokenToBody({
       backendPath: 'profiles/generate-token',
       body: encode(''),
       refreshToken: 'refresh-token',
       config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
     });
 
+    expect(isMerged).toBe(true);
     expect(JSON.parse(decode(body)!)).toEqual({ refreshToken: 'refresh-token' });
   });
 
-  it('falls back to an empty object when the body is not valid JSON', () => {
-    const body = applyRefreshTokenToBody({
-      backendPath: 'profiles/generate-token',
-      body: encode('not json'),
-      refreshToken: 'refresh-token',
-      config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
-    });
+  it('forwards a body that is not valid JSON untouched rather than discarding it', () => {
+    const body = encode('not json');
 
-    expect(JSON.parse(decode(body)!)).toEqual({ refreshToken: 'refresh-token' });
+    expect(
+      applyRefreshTokenToBody({
+        backendPath: 'profiles/generate-token',
+        body,
+        refreshToken: 'refresh-token',
+        config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
+      }),
+    ).toEqual({ body, isMerged: false });
   });
 
-  it('falls back to an empty object when the body is a JSON array', () => {
-    const body = applyRefreshTokenToBody({
-      backendPath: 'profiles/generate-token',
-      body: encode(JSON.stringify([1, 2, 3])),
+  it('forwards a JSON array untouched — there is no key to merge into', () => {
+    const body = encode(JSON.stringify([1, 2, 3]));
+
+    expect(
+      applyRefreshTokenToBody({
+        backendPath: 'profiles/generate-token',
+        body,
+        refreshToken: 'refresh-token',
+        config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
+      }),
+    ).toEqual({ body, isMerged: false });
+  });
+
+  it('forwards a urlencoded body untouched', () => {
+    const body = encode('email=a%40b.com&name=Test');
+
+    expect(
+      applyRefreshTokenToBody({
+        backendPath: 'profiles/generate-token',
+        body,
+        refreshToken: 'refresh-token',
+        config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
+      }),
+    ).toEqual({ body, isMerged: false });
+  });
+
+  it('forwards a multipart body untouched, byte for byte', () => {
+    const multipart = [
+      '------WebKitFormBoundary',
+      'Content-Disposition: form-data; name="file"; filename="a.png"',
+      'Content-Type: image/png',
+      '',
+      'PNG\r\n\n',
+      '------WebKitFormBoundary--',
+      '',
+    ].join('\r\n');
+    const body = encode(multipart);
+
+    const result = applyRefreshTokenToBody({
+      backendPath: 'profiles/upload',
+      body,
       refreshToken: 'refresh-token',
-      config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
+      config: createConfig([{ to: /^profiles\//, in: 'body' }]),
     });
 
-    expect(JSON.parse(decode(body)!)).toEqual({ refreshToken: 'refresh-token' });
+    expect(result).toEqual({ body, isMerged: false });
+    expect(decode(result.body)).toBe(multipart);
   });
 
   it('returns the body untouched for a non-matching path', () => {
@@ -97,7 +151,7 @@ describe('applyRefreshTokenToBody', () => {
         refreshToken: 'refresh-token',
         config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
       }),
-    ).toBe(body);
+    ).toEqual({ body, isMerged: false });
   });
 
   it('returns the body untouched when there is no refresh token', () => {
@@ -109,17 +163,18 @@ describe('applyRefreshTokenToBody', () => {
         body,
         config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
       }),
-    ).toBe(body);
+    ).toEqual({ body, isMerged: false });
   });
 
   it('still merges for another path matched by a pattern that also matches endpoints.refresh', () => {
-    const body = applyRefreshTokenToBody({
+    const { body, isMerged } = applyRefreshTokenToBody({
       backendPath: 'auth/exchange',
       body: encode('{}'),
       refreshToken: 'refresh-token',
       config: createConfig([{ to: /^auth\//, in: 'body' }]),
     });
 
+    expect(isMerged).toBe(true);
     expect(JSON.parse(decode(body)!)).toEqual({ refreshToken: 'refresh-token' });
   });
 
@@ -133,17 +188,17 @@ describe('applyRefreshTokenToBody', () => {
         refreshToken: 'refresh-token',
         config: createConfig(),
       }),
-    ).toBe(body);
+    ).toEqual({ body, isMerged: false });
   });
 
-  it('leaves an undefined body (GET/DELETE) untouched', () => {
+  it('leaves an undefined body (GET/DELETE) untouched and reports no merge', () => {
     expect(
       applyRefreshTokenToBody({
         backendPath: 'profiles/generate-token',
         refreshToken: 'refresh-token',
         config: createConfig([{ to: 'profiles/generate-token', in: 'body' }]),
       }),
-    ).toBeUndefined();
+    ).toEqual({ body: undefined, isMerged: false });
   });
 
   it('does not affect a header or cookie delivery', () => {
@@ -156,6 +211,6 @@ describe('applyRefreshTokenToBody', () => {
         refreshToken: 'refresh-token',
         config: createConfig([{ to: 'profiles/generate-token', in: 'cookie' }]),
       }),
-    ).toBe(body);
+    ).toEqual({ body, isMerged: false });
   });
 });

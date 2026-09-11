@@ -322,7 +322,8 @@ Which endpoints receive the refresh token, and where it is placed for each.
 ```ts
 send: [
   { to: 'auth/refresh', in: 'body', key: 'refreshToken' },
-  { to: 'profiles/generate-token', in: 'cookie' },
+  { to: 'profiles/generate-token', in: 'body' },
+  { to: 'profiles/switch', in: 'cookie' },
 ]
 ```
 
@@ -334,10 +335,10 @@ Rules:
   `{ in: 'body', key: 'refreshToken' }`. Most configs never write this row.
 - **Listing an endpoint enables forwarding for it.** Any row other than `endpoints.refresh` makes
   the proxy attach the refresh token to relayed requests for that path.
-- **`body` works for any endpoint.** For `endpoints.refresh` the proxy builds the request itself. For
-  any other endpoint the request is relayed, so the proxy parses the forwarded body as JSON, adds
-  `key`, and re-serializes it (an unparsable or missing body is treated as `{}`); the `Content-Type`
-  header is set to `application/json` to match.
+- **`body` works for any endpoint.** For `endpoints.refresh` the proxy builds the request itself.
+  For any other endpoint the request is relayed, so the proxy parses the forwarded body, adds `key`
+  and re-serializes it as JSON, setting `Content-Type: application/json` to match. This applies to
+  a JSON object body or an empty one — anything else is forwarded untouched, see below.
 - **`name` defaults to `tokens.refresh.cookie.name`** for a `cookie` row, and to `X-Refresh-Token`
   for a `header` row.
 - Only the refresh token is sent. The inbound `Cookie` header is stripped first and rebuilt from
@@ -353,12 +354,22 @@ receive the token to inherit its remaining lifetime.
 **Keep the list narrow.** Without a proxy you would scope a refresh cookie with
 `Path=/auth/refresh`; behind a proxy that attribute resolves against your app, not the backend, so
 this list is what replaces it. A catch-all like `[{ to: /.*/, in: 'cookie' }]` hands the credential
-to every service behind the proxy — and to every access log that dumps request headers.
+to every service behind the proxy — and to every access log that dumps request headers, or, for a
+`body` row, to every log that dumps request bodies.
 
-**There is no `body` placement for relayed requests.** Injecting into the body means parsing,
-merging and re-serializing the forwarded `ArrayBuffer`, which would corrupt multipart and binary
-payloads, and `GET`/`DELETE` requests have no body at all. If your backend reads the refresh token
-from a JSON body on a relayed endpoint, use `{ in: 'header' }` and read the header instead.
+**`body` on a relayed endpoint only rewrites JSON.** Injecting into the body means parsing, merging
+and re-serializing the forwarded `ArrayBuffer`, so the proxy does it only when that is lossless:
+when the body parses as a JSON object, or when there is no body to begin with (a `POST` sent without
+one — the key still reaches the backend as `{ "<key>": "<token>" }`).
+
+Everything else is forwarded **byte for byte with no token attached**, and its `Content-Type` is
+left alone — a multipart upload, a urlencoded form, a binary payload, a bare JSON array. Merging
+there would mean discarding the caller's payload, which is never the right trade for attaching a
+credential. `GET` and `DELETE` have no body at all and are likewise left alone.
+
+So a `body` row on a path that carries non-JSON requests silently sends no token. If your backend
+reads the refresh token on such an endpoint, use `{ in: 'header' }` or `{ in: 'cookie' }` — those
+work regardless of the body.
 
 ### `endpoints`
 

@@ -5,7 +5,7 @@ import { resolveRefreshTokenDelivery } from '../src/request/auth/resolve-refresh
 
 import type { RefreshTokenDelivery } from '../src/types';
 
-function createConfig(send?: RefreshTokenDelivery<'auth/refresh'>[]) {
+function createConfig(send?: RefreshTokenDelivery[]) {
   return normalizeConfig({
     backendBaseUrl: 'https://backend.test',
     tokens: {

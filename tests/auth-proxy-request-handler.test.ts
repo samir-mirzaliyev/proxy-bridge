@@ -23,7 +23,7 @@ function createRequest(url: string, init?: RequestInit) {
   return request;
 }
 
-function createHandler(send?: RefreshTokenDelivery<'auth/refresh'>[], hooks?: ProxyHooks) {
+function createHandler(send?: RefreshTokenDelivery[], hooks?: ProxyHooks) {
   return new AuthProxyRequestHandler(
     normalizeConfig({
       backendBaseUrl: 'https://backend.test/v1',
@@ -193,6 +193,43 @@ describe('AuthProxyRequestHandler', () => {
     expect(initialHeaders.get('Cookie')).toBe('refresh_token=old-refresh-token');
     expect(retryHeaders.get('Cookie')).toBe('refresh_token=new-refresh-token');
     expect(retryHeaders.get('Authorization')).toBe('Bearer new-access-token');
+  });
+
+  it('merges the rotated refresh token into the body when retrying after a refresh', async () => {
+    cookieValues.set('access_token', 'old-access-token');
+    cookieValues.set('refresh_token', 'old-refresh-token');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          accessToken: 'new-access-token',
+          refreshToken: 'new-refresh-token',
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ data: {} }));
+
+    await createHandler([{ to: 'profiles/generate-token', in: 'body' }]).handle({
+      request: createRequest('https://app.test/api/profiles/generate-token?profileId=1', {
+        method: 'POST',
+      }),
+      context: {
+        params: Promise.resolve({ proxy: ['profiles', 'generate-token'] }),
+      },
+      method: 'POST',
+    });
+
+    function readBody(callIndex: number) {
+      const { body } = fetchMock.mock.calls[callIndex]?.[1] as RequestInit;
+
+      return JSON.parse(new TextDecoder().decode(body as ArrayBuffer));
+    }
+
+    expect(readBody(0)).toEqual({ refreshToken: 'old-refresh-token' });
+    expect(readBody(2)).toEqual({ refreshToken: 'new-refresh-token' });
+    expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get('Cookie')).toBe(
+      null,
+    );
   });
 
   it('always clears cookies on the logout endpoint', async () => {

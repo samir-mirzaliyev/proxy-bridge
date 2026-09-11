@@ -70,9 +70,10 @@ export type AccessTokenSender =
  * One row of `tokens.refresh.send`: which endpoint receives the refresh token, and where it is
  * placed. For `endpoints.refresh` the proxy builds the request itself; for any other endpoint the
  * request is relayed, so `body` merges the token into the forwarded JSON body (parsed and
- * re-serialized) rather than appending a header.
+ * re-serialized) rather than appending a header. Only a JSON object body — or an empty one — is
+ * rewritten; see `tokens.refresh.send` in the README.
  */
-export type RefreshTokenDelivery<TRefresh extends string = string> =
+export type RefreshTokenDelivery =
   | { to: EndpointPattern; in: 'body'; key?: string }
   | { to: EndpointPattern; in: 'header'; name?: string }
   | { to: EndpointPattern; in: 'cookie'; name?: string };
@@ -82,20 +83,20 @@ export type AccessTokenConfig = {
   send?: AccessTokenSender;
 };
 
-export type RefreshTokenConfig<TRefresh extends string = string> = {
+export type RefreshTokenConfig = {
   cookie: AuthCookieConfig;
   /**
    * Endpoints that receive the refresh token, and where it is placed for each. The first matching
    * row wins. `endpoints.refresh` gets `{ in: 'body', key: 'refreshToken' }` implicitly when it is
    * not listed. Listing any other endpoint enables forwarding for it.
    */
-  send?: RefreshTokenDelivery<TRefresh>[];
+  send?: RefreshTokenDelivery[];
 };
 
 /** Where each token is stored, and how it reaches the backend. */
-export type ProxyTokensConfig<TRefresh extends string = string> = {
+export type ProxyTokensConfig = {
   access: AccessTokenConfig;
-  refresh: RefreshTokenConfig<TRefresh>;
+  refresh: RefreshTokenConfig;
 };
 
 /** Which backend endpoints get special treatment. */
@@ -204,7 +205,7 @@ export type RefreshDecisionContext = {
 
 export type ProxyConfig<TRefresh extends string = string> = {
   backendBaseUrl?: string;
-  tokens: ProxyTokensConfig<TRefresh>;
+  tokens: ProxyTokensConfig;
   endpoints: ProxyEndpointsConfig<TRefresh>;
   autoRefresh?: ProxyAutoRefreshConfig;
   headers?: ProxyHeadersConfig;
@@ -230,6 +231,15 @@ export type NormalizedRefreshTokenDelivery =
   | { to: EndpointPattern; in: 'body'; key: string }
   | { to: EndpointPattern; in: 'header'; name: string }
   | { to: EndpointPattern; in: 'cookie'; name: string };
+
+/**
+ * The body forwarded to the backend, and whether the refresh token was merged into it. `isMerged`
+ * is what decides the `Content-Type` header, so one decision drives both.
+ */
+export type RefreshTokenBodyResult = {
+  body?: ArrayBuffer;
+  isMerged: boolean;
+};
 
 export type NormalizedAccessTokenPlacement = Required<AccessTokenPlacement>;
 

@@ -16,7 +16,7 @@ function createService({
   send,
   autoRefresh,
 }: {
-  send?: RefreshTokenDelivery<'auth/refresh'>[];
+  send?: RefreshTokenDelivery[];
   autoRefresh?: ProxyAutoRefreshConfig;
 } = {}) {
   const config = normalizeConfig({

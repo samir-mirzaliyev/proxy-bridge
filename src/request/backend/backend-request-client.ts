@@ -1,7 +1,7 @@
 import { buildBackendUrl } from './build-backend-url.util';
-import { applyRefreshTokenToBody } from '../body/apply-refresh-token-to-body.util';
 import { invokeHook } from '../../hooks/invoke-hook.util';
 import { createForwardHeaders } from '../headers/create-forward-headers';
+import { applyRefreshTokenToBody } from '../body/apply-refresh-token-to-body.util';
 
 import type { HttpMethod, NormalizedProxyConfig, ProxyRequest } from '../../types';
 
@@ -26,17 +26,18 @@ export class BackendRequestClient {
     isRetry?: boolean;
   }) {
     const url = buildBackendUrl({ request, backendPath, config: this.config });
+    const { body: forwardedBody, isMerged } = applyRefreshTokenToBody({
+      backendPath,
+      body,
+      refreshToken,
+      config: this.config,
+    });
     const headers = createForwardHeaders({
       request,
       backendPath,
       accessToken,
       refreshToken,
-      config: this.config,
-    });
-    const forwardedBody = applyRefreshTokenToBody({
-      backendPath,
-      body,
-      refreshToken,
+      isRefreshTokenInBody: isMerged,
       config: this.config,
     });
 

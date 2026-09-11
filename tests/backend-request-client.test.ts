@@ -135,4 +135,47 @@ describe('BackendRequestClient', () => {
       refreshToken: 'refresh-token',
     });
   });
+
+  it('forwards a non-JSON body untouched and does not claim it is JSON', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request('https://app.test/api/profiles/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data; boundary=xyz' },
+    }) as Request & { nextUrl: URL };
+    request.nextUrl = new URL(request.url);
+    const multipart =
+      '------xyz\r\nContent-Disposition: form-data; name="a"\r\n\r\n1\r\n------xyz--';
+    const body = new TextEncoder().encode(multipart).buffer;
+
+    const client = new BackendRequestClient(
+      normalizeConfig({
+        backendBaseUrl: 'https://backend.test/v1',
+        tokens: {
+          access: { cookie: { name: 'access_token' } },
+          refresh: {
+            cookie: { name: 'refresh_token' },
+            send: [{ to: /^profiles\//, in: 'body' }],
+          },
+        },
+        endpoints: {
+          refresh: 'auth/refresh',
+          logout: 'auth/logout',
+          issuesTokens: [],
+        },
+      }),
+    );
+
+    await client.send({
+      request,
+      method: 'POST',
+      backendPath: 'profiles/avatar',
+      body,
+      refreshToken: 'refresh-token',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+
+    expect(init.body).toBe(body);
+    expect(new Headers(init.headers).get('Content-Type')).toBe('multipart/form-data; boundary=xyz');
+  });
 });

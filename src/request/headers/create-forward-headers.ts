@@ -8,11 +8,13 @@ function applyRefreshToken({
   headers,
   backendPath,
   refreshToken,
+  isRefreshTokenInBody,
   config,
 }: {
   headers: Headers;
   backendPath: string;
   refreshToken?: string;
+  isRefreshTokenInBody: boolean;
   config: NormalizedProxyConfig;
 }) {
   if (!refreshToken) {
@@ -26,9 +28,13 @@ function applyRefreshToken({
   }
 
   if (delivery.in === 'body') {
-    // The token is merged into the forwarded body elsewhere (see `applyRefreshTokenToBody`); the
-    // body is always re-serialized as JSON, so the content type must say so too.
-    headers.set('Content-Type', 'application/json');
+    // `applyRefreshTokenToBody` owns the decision and has already run. It re-serializes the body as
+    // JSON when it merges, so the content type has to follow — and when it declined to merge
+    // (no body, or one that is not a JSON object) nothing here may claim otherwise.
+    if (isRefreshTokenInBody) {
+      headers.set('Content-Type', 'application/json');
+    }
+
     return;
   }
 
@@ -40,12 +46,15 @@ export function createForwardHeaders({
   backendPath,
   accessToken,
   refreshToken,
+  isRefreshTokenInBody = false,
   config,
 }: {
   request: ProxyRequest;
   backendPath: string;
   accessToken?: string;
   refreshToken?: string;
+  /** What `applyRefreshTokenToBody` decided for this request — see its `isMerged`. */
+  isRefreshTokenInBody?: boolean;
   config: NormalizedProxyConfig;
 }) {
   const headers = new Headers();
@@ -69,7 +78,7 @@ export function createForwardHeaders({
     headers.set(key, value);
   });
 
-  applyRefreshToken({ headers, backendPath, refreshToken, config });
+  applyRefreshToken({ headers, backendPath, refreshToken, isRefreshTokenInBody, config });
   applyAccessToken({ headers, request, backendPath, accessToken, config });
 
   return headers;

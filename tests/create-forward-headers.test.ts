@@ -19,7 +19,7 @@ function createForwardConfig({
   accessToken,
   refreshCookieName = 'refresh_token',
 }: {
-  send?: RefreshTokenDelivery<'auth/refresh'>[];
+  send?: RefreshTokenDelivery[];
   accessToken?: AccessTokenSender;
   refreshCookieName?: string;
 } = {}) {
@@ -276,7 +276,44 @@ describe('createForwardHeaders', () => {
     expect(headers.get('Cookie')).toBeNull();
   });
 
-  it('sets a JSON content type when the body transport is configured, without touching headers', () => {
+  it('sets a JSON content type when the token was merged into the body, without touching headers', () => {
+    const headers = createForwardHeaders({
+      request: createRequest(),
+      backendPath: 'profiles/generate-token',
+      refreshToken: 'refresh-token',
+      isRefreshTokenInBody: true,
+      config: createForwardConfig({
+        send: [{ to: 'profiles/generate-token', in: 'body' }],
+      }),
+    });
+
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('Cookie')).toBeNull();
+    expect(headers.get('X-Refresh-Token')).toBeNull();
+  });
+
+  it('leaves the content type alone when the body transport declined to merge', () => {
+    const request = new Request('https://example.com/api', {
+      headers: { 'Content-Type': 'multipart/form-data; boundary=xyz' },
+    }) as Request & { nextUrl: URL };
+    request.nextUrl = new URL(request.url);
+
+    const headers = createForwardHeaders({
+      request,
+      backendPath: 'profiles/generate-token',
+      refreshToken: 'refresh-token',
+      isRefreshTokenInBody: false,
+      config: createForwardConfig({
+        send: [{ to: 'profiles/generate-token', in: 'body' }],
+      }),
+    });
+
+    expect(headers.get('Content-Type')).toBe('multipart/form-data; boundary=xyz');
+    expect(headers.get('Cookie')).toBeNull();
+    expect(headers.get('X-Refresh-Token')).toBeNull();
+  });
+
+  it('sets no JSON content type on a bodiless GET/DELETE, where no merge can happen', () => {
     const headers = createForwardHeaders({
       request: createRequest(),
       backendPath: 'profiles/generate-token',
@@ -286,9 +323,7 @@ describe('createForwardHeaders', () => {
       }),
     });
 
-    expect(headers.get('Content-Type')).toBe('application/json');
-    expect(headers.get('Cookie')).toBeNull();
-    expect(headers.get('X-Refresh-Token')).toBeNull();
+    expect(headers.get('Content-Type')).toBeNull();
   });
 
   it('does not set a JSON content type for the refresh endpoint itself (relayed pass-through)', () => {
