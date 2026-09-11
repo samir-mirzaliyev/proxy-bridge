@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+`{ in: 'body' }` on `tokens.refresh.send` is no longer restricted to `endpoints.refresh`. Endpoints that mint a new token pair from the current refresh token — profile switching, token generation — can now receive it in the request body instead of a header or a cookie, which is what a backend reading `@RequestBody` expects.
+
+- Added: a `body` row may name any endpoint. For `endpoints.refresh` the proxy still builds the request itself; for any other endpoint the request is relayed, so the proxy parses the forwarded body, adds the key and re-serializes it as JSON, stamping `Content-Type: application/json`. A retry after an automatic refresh re-merges the **rotated** token, so the body never carries an already-spent credential.
+- Added: the rewrite is applied only when it is lossless — when the body parses as a JSON object, or when there is no body at all (a `POST` sent without one still yields `{ "<key>": "<token>" }`). A multipart, urlencoded, binary or non-object JSON body is forwarded byte for byte with no token attached and its `Content-Type` untouched, because merging would mean discarding the caller's payload. `GET`/`DELETE` are likewise left alone. A `body` row on a path that carries such requests therefore sends no token — use `{ in: 'header' }` or `{ in: 'cookie' }` there.
+- Removed: the startup error that rejected `{ in: 'body' }` for anything but `endpoints.refresh`, along with the `NoInfer` guard on `ProxyConfig['tokens']` that enforced the same rule in the type system.
+- Changed: `RefreshTokenDelivery`, `RefreshTokenConfig` and `ProxyTokensConfig` lost their `TRefresh` type parameter, which became vacuous once a `body` row's `to` widened to `EndpointPattern`. `ProxyConfig<TRefresh>` and `ProxyBridgeConfig<TRefresh>` keep theirs. Only code that instantiated those three by hand — `RefreshTokenDelivery<'auth/refresh'>` — needs the argument dropped; inferred usage is unaffected.
+
 ## 1.0.0
 
 Breaking: the config is now grouped by token instead of by operation. Passing a 0.x config throws at startup listing every key to rename, because silently ignoring them would leave the token-issuing endpoint list empty — tokens would never be stored and auth would break with no visible error. Behaviour is otherwise unchanged; see "Migrating from 0.x" in the README for a before/after config and the full rename table.
